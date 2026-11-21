@@ -98,7 +98,9 @@ class PipeWireAudioDevice:
             _, stderr = process.communicate()
             path.unlink(missing_ok=True)
             raise AudioUnavailable("PipeWire recorder did not stop after push-to-talk release")
-        if process.returncode not in (0, -signal.SIGINT, 128 + signal.SIGINT):
+        # pw-record exits 1 on SIGINT on some PipeWire builds while still writing
+        # a complete WAV. Accept it; the payload check below still fails loudly.
+        if process.returncode not in (0, 1, -signal.SIGINT, 128 + signal.SIGINT):
             path.unlink(missing_ok=True)
             detail = (stderr or b"").decode("utf-8", errors="replace").strip()
             raise AudioUnavailable(f"PipeWire recording failed: {detail or process.returncode}")
