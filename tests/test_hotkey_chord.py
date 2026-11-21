@@ -8,7 +8,7 @@ from omen.voice.hotkey import ChordTracker, parse_hotkey_spec
 
 
 EV_KEY = 1
-CTRL_L, CTRL_R, KEY_V, KEY_A = 29, 97, 47, 30
+CTRL_L, CTRL_R, ALT_L, ALT_R, KEY_V, KEY_A = 29, 97, 56, 100, 47, 30
 
 
 class HotkeyChordTests(unittest.TestCase):
@@ -40,6 +40,13 @@ class HotkeyChordTests(unittest.TestCase):
         self.assertIsNone(tracker.handle(0, KEY_V, 1, EV_KEY))
         self.assertEqual(tracker.handle(EV_KEY, KEY_V, 1, EV_KEY), "press")
         self.assertEqual(tracker.handle(EV_KEY, KEY_V, 2, EV_KEY), None)
+        self.assertEqual(tracker.handle(EV_KEY, KEY_V, 0, EV_KEY), "release")
+
+    def test_alt_modifier_chord(self) -> None:
+        tracker = ChordTracker(KEY_V, {ALT_L, ALT_R})
+        self.assertIsNone(tracker.handle(EV_KEY, KEY_V, 1, EV_KEY))
+        tracker.handle(EV_KEY, ALT_R, 1, EV_KEY)
+        self.assertEqual(tracker.handle(EV_KEY, KEY_V, 1, EV_KEY), "press")
         self.assertEqual(tracker.handle(EV_KEY, KEY_V, 0, EV_KEY), "release")
 
     def test_single_key_preserves_legacy_behavior(self) -> None:
