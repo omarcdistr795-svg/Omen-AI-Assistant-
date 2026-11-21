@@ -202,11 +202,10 @@ kill switch and audit log as terminal chat. Audio and transcripts stay local;
 temporary recordings and synthesized WAV replies are removed after use.
 Push-to-talk is the default. The Linux adapter uses PipeWire (`pw-record` and
 `pw-play`) with a configurable global key in `voice.hotkey`. VAD, Vosk STT and
-Piper TTS are separate lazy-loaded adapters. With
-`voice.voice_only_answers: true` (the default), Omen speaks every reply and does
-not print the answer text; transcript and status lines are still shown. Set it
-to `false` to get printed answers back. Optional speech dependencies are
-pinned in the `voice` extra:
+Piper TTS are separate lazy-loaded adapters. By default every reply is both
+printed and spoken. Set `voice.voice_only_answers: true` to speak replies
+without printing their text. Optional speech dependencies are pinned in the
+`voice` extra:
 
 ```bash
 python3 -m pip install -e '.[voice]'

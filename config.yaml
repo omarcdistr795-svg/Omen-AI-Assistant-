@@ -239,7 +239,7 @@ core_tools:
 # Phase 4 — voice. Models are local paths and loaded lazily on first use.
 voice:
   enabled: true
-  voice_only_answers: true
+  voice_only_answers: false
   mode: push_to_talk
   hotkey: ALT+V
   audio_backend: pipewire

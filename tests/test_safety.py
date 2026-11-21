@@ -32,6 +32,12 @@ class RedactionTests(unittest.TestCase):
         self.assertIn("[REDACTED]", redact_text("password=TESTFAKEPASSWORD here"))
         self.assertNotIn("TESTFAKEPASSWORD", redact_text("password=TESTFAKEPASSWORD here"))
 
+    def test_hex_ids_survive_phone_redaction(self):
+        token_id = "6702d57f188440059895c0f9e25350b4"
+        self.assertEqual(redact_text(token_id), token_id)
+        self.assertIn("[PHONE_REDACTED]", redact_text(f"token {token_id} call 555-123-4567"))
+        self.assertIn(token_id, redact_text(f"token {token_id} call 555-123-4567"))
+
     def test_personal_data_and_recursive_redaction(self):
         text = "mail me at soham@example.com or +91 98765 43210"
         redacted = redact_text(text)

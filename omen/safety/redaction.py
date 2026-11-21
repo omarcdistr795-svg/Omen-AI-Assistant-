@@ -36,7 +36,7 @@ _PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
-_SAFE_ID = re.compile(r"[a-f0-9]{32}")
+_SAFE_ID = re.compile(r"\b[a-f0-9]{32}\b")
 
 
 def _protect_safe_ids(text: str) -> tuple[str, dict[str, str]]:
