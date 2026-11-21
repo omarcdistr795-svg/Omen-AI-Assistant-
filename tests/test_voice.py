@@ -110,6 +110,15 @@ class VoiceTests(unittest.TestCase):
         self.assertTrue(any(e["event_type"] == "voice_input" for e in self.audit.events))
         self.assertNotIn("hello Omen", str(self.audit.events))
 
+    def test_voice_only_answers_are_spoken_and_not_printed(self):
+        self.app_config.sections["voice"]["voice_only_answers"] = True
+        result = self.voice.process_sample(self.sample)
+        self.assertTrue(result["accepted"])
+        self.assertEqual(self.brain_calls, ["hello Omen"])
+        self.assertEqual(self.synthesizer.calls, ["Understood."])
+        self.assertFalse(any("Omen:" in item for item in self.messages))
+        self.assertTrue(any("Heard: hello Omen" in item for item in self.messages))
+
     def test_risky_and_uncertain_transcripts_require_confirmation(self):
         self.recognizer.result = Transcription("delete the old note", 0.95)
         self.voice.confirmation = lambda transcript, _confidence: transcript == "delete the old note"

@@ -89,6 +89,10 @@ class VoiceService:
     def _value(self, path: str, default: Any = None) -> Any:
         return self.config.get(f"voice.{path}", default)
 
+    def voice_only_answers(self) -> bool:
+        """When enabled, replies are spoken and never printed as text."""
+        return bool(self._value("voice_only_answers", False))
+
     def _path(self, value: str) -> Path:
         path = Path(value)
         return path if path.is_absolute() else (self.root / path)
@@ -239,7 +243,8 @@ class VoiceService:
             if not self.brain:
                 raise RuntimeError("Voice brain is not bound to OmenApp")
             reply = str(self.brain(transcript))
-            self.output(f"Omen: {reply}")
+            if not self.voice_only_answers():
+                self.output(f"Omen: {reply}")
             self._audit("voice_input", "accepted", "local transcript routed through the existing Omen brain loop")
             if reply:
                 try:

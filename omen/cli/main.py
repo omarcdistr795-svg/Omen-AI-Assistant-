@@ -70,13 +70,23 @@ def main() -> int:
                     break
                 continue
             try:
+                voice_only = app.voice.voice_only_answers()
+                collected: list[str] = []
                 for token in app.stream_chat(
                     line,
-                    on_token=lambda delta: print(delta, end="", flush=True),
+                    on_token=lambda delta: None,
                     on_progress=lambda result: print(render_tool_progress(result), flush=True),
                 ):
-                    pass
-                print(flush=True)
+                    if voice_only:
+                        collected.append(token)
+                    else:
+                        print(token, end="", flush=True)
+                reply = "".join(collected)
+                if voice_only:
+                    if reply:
+                        app.voice.speak(reply)
+                else:
+                    print(flush=True)
             except Exception as exc:
                 # Fail loudly: surface the real error instead of swallowing it.
                 print(f"[error] {type(exc).__name__}: {exc}", file=sys.stderr, flush=True)
