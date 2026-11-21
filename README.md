@@ -205,7 +205,16 @@ Push-to-talk is the default. The Linux adapter uses PipeWire (`pw-record` and
 Piper TTS are separate lazy-loaded adapters. By default every reply is both
 printed and spoken. Set `voice.voice_only_answers: true` to speak replies
 without printing their text. Optional speech dependencies are pinned in the
-`voice` extra:
+`voice` extra. On Hyprland/Omarchy you can skip the keyboard hotkey entirely
+and use the floating voice orb:
+
+```bash
+./start-voice-icon.sh
+```
+
+Hold the mouse button on the orb to talk and release it to send. The orb pulses
+while listening and shows the transcript and reply. It is also available as
+`Omen Voice` in the application launcher; right-click it to close.
 
 ```bash
 python3 -m pip install -e '.[voice]'
