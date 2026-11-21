@@ -240,7 +240,7 @@ core_tools:
 voice:
   enabled: true
   mode: push_to_talk
-  hotkey: ALT+V
+  hotkey: CTRL+V
   audio_backend: pipewire
   audio_mode: headset
   record_command: pw-record
@@ -251,7 +251,7 @@ voice:
   speaker_echo_guard_seconds: 0.15
   sample_rate: 16000
   channels: 1
-  max_recording_seconds: 20
+  max_recording_seconds: 300
   vad:
     enabled: true
     backend: energy

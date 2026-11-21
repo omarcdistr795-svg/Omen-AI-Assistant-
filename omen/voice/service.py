@@ -151,14 +151,14 @@ class VoiceService:
 
     def begin_push_to_talk(self) -> None:
         self._begin_capture(
-            int(self._value("max_recording_seconds", 20)),
+            int(self._value("max_recording_seconds", 300)),
             "push_to_talk",
             "Listening. Release the push-to-talk key when you are done.",
         )
 
     def _begin_capture(self, seconds: int, reason: str, announcement: str) -> None:
-        if seconds <= 0 or seconds > 60:
-            raise ValueError("Voice capture duration must be between 1 and 60 seconds")
+        if seconds <= 0 or seconds > 600:
+            raise ValueError("Voice capture duration must be between 1 and 600 seconds")
         audio = self._audio_device()
         interruption = audio.interrupt_playback() if hasattr(audio, "interrupt_playback") else {"interrupted": False, "latency_ms": 0.0}
         self._last_barge_in_ms = float(interruption.get("latency_ms", 0.0)) if interruption.get("interrupted") else None
@@ -370,7 +370,7 @@ class VoiceService:
             return {"started": False, "reason": "disabled"}
         if self.hotkey is None:
             self.hotkey = EvdevPushToTalk(
-                str(self._value("hotkey", "ALT+V")),
+                str(self._value("hotkey", "CTRL+V")),
                 self.begin_push_to_talk,
                 self._on_hotkey_release,
             )
@@ -382,7 +382,7 @@ class VoiceService:
         self._sync_resources()
         if self._value("wake.enabled", False):
             self.start_wake_listener()
-        return {"started": True, "hotkey": self._value("hotkey", "ALT+V")}
+        return {"started": True, "hotkey": self._value("hotkey", "CTRL+V")}
 
     def start_wake_listener(self) -> dict:
         if not bool(self._value("wake.enabled", False)):
@@ -511,7 +511,7 @@ class VoiceService:
             "implementation": self.implementation,
             "enabled": bool(self._value("enabled", True)),
             "mode": self._value("mode", "push_to_talk"),
-            "hotkey": self._value("hotkey", "ALT+V"),
+            "hotkey": self._value("hotkey", "CTRL+V"),
             "ready": ready,
             "blocked_external": bool(self._value("enabled", True)) and not ready,
             "stt_model_available": model_path.is_dir(),

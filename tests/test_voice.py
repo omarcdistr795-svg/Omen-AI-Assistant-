@@ -134,6 +134,19 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(self.kills, ["spoken kill command"])
         self.assertEqual(self.brain_calls, [])
 
+    def test_hold_to_talk_stays_recording_until_release(self):
+        self.voice.begin_push_to_talk()
+        timer = self.voice._recording_timer
+        self.assertIsNotNone(timer)
+        self.assertGreaterEqual(timer.interval, 300)
+        self.assertTrue(self.audio.active)
+        self.voice.begin_push_to_talk()
+        self.assertIs(self.voice._recording_timer, timer)
+        self.assertTrue(self.audio.active)
+        result = self.voice.end_push_to_talk()
+        self.assertTrue(result.get("accepted"))
+        self.assertFalse(self.audio.active)
+
     def test_barge_in_interrupts_speech_under_300ms(self):
         audio = MockAudioDevice(self.sample, block_playback=True)
         self.voice.audio = audio
