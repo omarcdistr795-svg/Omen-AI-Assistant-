@@ -242,7 +242,7 @@ host, make these available to the Omen process:
   or configure a PipeWire echo-cancel source and set its name as
   `voice.record_target`. Speaker mode remains best-effort.
 - Read access to the configured global hotkey device (the current default is
-  `CTRL+V`). If `/dev/input` is restricted, use a permitted hotkey
+  `ALT+V`). If `/dev/input` is restricted, use a permitted hotkey
   provider or grant the Omen user access to the keyboard device.
 - Install the pinned `voice` extra and put the Vosk small English model and
   Piper medium voice plus JSON config at the configured paths under

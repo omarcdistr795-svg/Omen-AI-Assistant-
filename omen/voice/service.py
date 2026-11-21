@@ -370,7 +370,7 @@ class VoiceService:
             return {"started": False, "reason": "disabled"}
         if self.hotkey is None:
             self.hotkey = EvdevPushToTalk(
-                str(self._value("hotkey", "CTRL+V")),
+                str(self._value("hotkey", "ALT+V")),
                 self.begin_push_to_talk,
                 self._on_hotkey_release,
             )
@@ -382,7 +382,7 @@ class VoiceService:
         self._sync_resources()
         if self._value("wake.enabled", False):
             self.start_wake_listener()
-        return {"started": True, "hotkey": self._value("hotkey", "CTRL+V")}
+        return {"started": True, "hotkey": self._value("hotkey", "ALT+V")}
 
     def start_wake_listener(self) -> dict:
         if not bool(self._value("wake.enabled", False)):
@@ -511,7 +511,7 @@ class VoiceService:
             "implementation": self.implementation,
             "enabled": bool(self._value("enabled", True)),
             "mode": self._value("mode", "push_to_talk"),
-            "hotkey": self._value("hotkey", "CTRL+V"),
+            "hotkey": self._value("hotkey", "ALT+V"),
             "ready": ready,
             "blocked_external": bool(self._value("enabled", True)) and not ready,
             "stt_model_available": model_path.is_dir(),
