@@ -1,0 +1,356 @@
+# Omen Phase 1 defaults. Secrets belong in .env, personal overrides in
+# config.local.yaml (git-ignored). Only Phase 1 sections are present.
+
+system:
+  name: Omen
+  user: Soham Bhagat
+  agent_id: omen-phase1
+  timezone: UTC
+  state_dir: state
+  log_dir: state/logs
+  session: default
+
+providers:
+  default: ollama
+  fallback:
+    - openai_compatible
+  streaming: true
+  adapters:
+    ollama:
+      type: ollama
+      local: true
+      base_url: http://127.0.0.1:11434
+      model: llama3.2:3b-instruct-q4_K_M
+      timeout_seconds: 30
+    openai_compatible:
+      type: openai_compatible
+      local: false
+      base_url: https://api.openai.com/v1
+      model: gpt-4o-mini
+      api_key_env: OMEN_OPENAI_API_KEY
+      timeout_seconds: 30
+      # LM Studio and other OpenAI-compatible servers work by changing
+      # base_url/model in config.local.yaml — no code change required.
+
+tools:
+  allowlist:
+    - demo.echo
+    - demo.calculate
+    - demo.note_create
+  approval_required_classes:
+    - low_risk_write
+    - external_write
+    - high_risk
+  timeout_seconds: 10
+  retry:
+    max_retries: 2
+    backoff_seconds: 0.25
+  rate_limit_per_minute: 20
+  idempotent_by_default: true
+
+safety:
+  always_blocked:
+    - payment_execution
+    - credential_sharing
+    - unapproved_financial_action
+  approval_ttl_seconds: 300
+  kill_switch_enabled: true
+  redact_personal_data: true
+  lifecycle: [plan, confirm, execute, verify, report]
+
+resources:
+  ram_target_gb: 8.0
+  ram_hard_ceiling_gb: 9.0
+  idle_ram_gb: 1.5
+  warn_percent: 80
+  degrade_percent: 85
+  emergency_percent: 92
+  heavy_models_max: 1
+  idle_unload_seconds: 300
+  degradation_order:
+    - dashboard
+    - heavy_scheduled_jobs
+    - memory_reindexing
+    - local_reasoning_model
+    - text_to_speech
+    - wake_word
+    - speech_to_text
+  never_degrade:
+    - safety
+    - approval_gate
+    - kill_switch
+    - audit_log
+    - terminal_chat
+  models:
+    local_reasoning:
+      kind: reasoning
+      memory_gb: 4.5
+      heavy: true
+    embeddings:
+      kind: embedding
+      memory_gb: 0.3
+      heavy: false
+    speech_to_text:
+      kind: speech_to_text
+      memory_gb: 1.0
+      heavy: false
+    text_to_speech:
+      kind: text_to_speech
+      memory_gb: 0.5
+      heavy: false
+
+cost:
+  enabled: false
+  monthly_budget_usd: 0.0
+  per_request_token_cap: 4000
+  warn_at_percent: 80
+  local_fallback: ollama
+  state_file: state/cost_state.json
+
+memory:
+  enabled: true
+  db_path: state/memory/omen_memory.db
+  file_store_dir: state/memory/files
+  backup_dir: state/memory/backups
+  embedding_model: local
+  embedding_dim: 128
+  max_recall_results: 5
+  min_similarity_score: 0.1
+  transient_half_life_days: 2.0
+  background_indexing: true
+
+# Phase 3 — Core tools. Additive only; Phase 1/2 sections are unchanged.
+core_tools:
+  enabled: true
+  # Names added to the Phase 1 registry allowlist at registration time.
+  # Policy -> approval gate -> audit log still apply to every call.
+  allowlist:
+    - web.search
+    - web.read
+    - web.summarise
+    - web.compare
+    - web.save_note
+    - files.read
+    - files.search
+    - files.summarise
+    - files.list
+    - files.draft
+    - files.update
+    - files.delete
+    - notes.create
+    - notes.get
+    - notes.list
+    - notes.search
+    - notes.update
+    - notes.delete
+    - reminders.create
+    - reminders.get
+    - reminders.list
+    - reminders.search
+    - reminders.update
+    - reminders.delete
+    - reminders.complete
+    - tasks.create
+    - tasks.get
+    - tasks.list
+    - tasks.search
+    - tasks.update
+    - tasks.delete
+    - tasks.complete
+    - calendar.create
+    - calendar.get
+    - calendar.list
+    - calendar.search
+    - calendar.update
+    - calendar.delete
+    - shell.status
+    - shell.run
+    - git.status
+    - git.diff
+    - git.history
+    - git.branches
+    - git.commit
+    - git.pr_draft
+    - system.status
+    - system.open_app
+    - system.media
+    - system.window
+    - rollback.plan
+    - rollback.undo
+    - code.inspect
+    - repo.context
+    - tests.run
+    - data.summarise
+  storage:
+    local_db: state/phase3/local.db
+    drafts_dir: state/phase3/drafts
+    quarantine_dir: state/phase3/quarantine
+  files:
+    allowed_roots:
+      - .
+    max_file_bytes: 1048576
+    max_output_chars: 20000
+  web:
+    # Offline mock by default. A real search/read connector is BLOCKED-EXTERNAL
+    # until explicitly enabled with a non-zero cloud budget and an external key.
+    provider: mock
+    search_connector: null
+    read_connector: null
+    max_results: 5
+    max_page_chars: 12000
+  shell:
+    allow_commands:
+      - ls
+      - pwd
+      - cat
+      - grep
+      - find
+      - echo
+      - wc
+      - head
+      - tail
+      - uname
+      - date
+      - true
+    deny_commands: []
+    allowed_roots:
+      - .
+    timeout_seconds: 5
+    max_output_chars: 20000
+    env_allowlist: [PATH, HOME, LANG, LC_ALL, TZ]
+  tests:
+    commands:
+      - python3 -m unittest discover -s tests -v
+  git:
+    allowed_repos:
+      - .
+    max_output_chars: 20000
+  system:
+    # All empty/off by default: deliberately fail closed until configured.
+    open_apps: {}
+    media_command: ""
+    window_command: ""
+    timeout_seconds: 5
+  connectors:
+    # MCP-style connectors are off by default. Example (not enabled):
+    # my_calendar: {enabled: false, type: mock, kind: calendar, external: false}
+    {}
+
+# Phase 4 — voice. Models are local paths and loaded lazily on first use.
+voice:
+  enabled: true
+  mode: push_to_talk
+  hotkey: KEY_RIGHTCTRL
+  audio_backend: pipewire
+  audio_mode: headset
+  record_command: pw-record
+  playback_command: pw-play
+  record_target: null
+  echo_guard_enabled: true
+  echo_window_seconds: 30
+  speaker_echo_guard_seconds: 0.15
+  sample_rate: 16000
+  channels: 1
+  max_recording_seconds: 20
+  vad:
+    enabled: true
+    backend: energy
+    threshold: 450
+  stt:
+    backend: vosk
+    model_path: state/models/vosk-model-small-en-us-0.15
+  tts:
+    backend: piper
+    model_path: state/models/en_US-lessac-medium.onnx
+    config_path: state/models/en_US-lessac-medium.onnx.json
+    light_model_path: state/models/en_US-lessac-low.onnx
+    light_config_path: state/models/en_US-lessac-low.onnx.json
+    length_scale: 1.12
+  require_transcript_confirmation_for_risky_or_ambiguous: true
+  retain_audio: false
+  follow_up_enabled: true
+  follow_up_seconds: 8
+  wake:
+    enabled: false
+    phrase: Hey Omen
+    sensitivity: 0.65
+  speaker_identification:
+    enabled: false
+    deferred_reason: no local speaker model available to benchmark within the Omen memory budget
+
+# Phase 5 — briefings and automation. Additive only; all earlier sections are
+# unchanged. Storage lives under state/automation and is safe to delete.
+automation:
+  enabled: true
+  state_dir: state/automation
+  scheduler:
+    enabled: true
+    max_retries: 3
+    backoff_seconds: 5
+    defer_seconds: 60
+    heavy_jobs_defer_under_pressure: true
+    low_priority_when_model_loaded: true
+  notifications:
+    enabled: true
+    quiet_hours:
+      enabled: true
+      start: "22:00"
+      end: "07:00"
+      defer_critical: false
+    priority_levels: [low, normal, high, critical]
+    channels:
+      terminal: true
+      log: true
+      voice: false  # opt in locally; falls back to terminal if voice is unavailable
+    anti_spam:
+      dedupe_window_seconds: 300
+      rate_limit_per_hour: 20
+      max_repeats: 3
+  briefings:
+    morning_time: "08:00"
+    evening_time: "20:00"
+    max_items: 5
+    weather:
+      enabled: false  # no forecast is invented without a configured connector
+      provider: mock
+      connector: null
+  guardian:
+    enabled: true
+    lead_times_minutes: [1440, 120, 30]
+    conflict_window_minutes: 30
+    checklist_enabled: true
+  build_alerts:
+    enabled: true
+    long_job_ms: 300000
+    regression_window: 5
+  contextual:
+    enabled: true
+    meeting_lead_minutes: 15
+  tools:
+    allowlist:
+      - brief.morning
+      - brief.evening
+      - status.report
+      - guardian.check
+      - build_alerts.scan
+      - automation.schedule
+      - automation.cancel
+      - notify.send
+      - contextual.remind
+
+
+# Phase 6 — local HUD dashboard. Local-only by default, authenticated.
+# Dashboard is the first thing to shed under memory pressure and must not load any model.
+# Optional secure phone access is OFF by default and must be explicitly enabled.
+dashboard:
+  enabled: true
+  host: 127.0.0.1
+  port: 8765
+  auth_enabled: true
+  token_env: OMEN_DASHBOARD_TOKEN
+  # Optional secure phone access: only if you explicitly ask for it and configure TLS.
+  allow_remote: false
+  remote_read_only: true
+  tls_cert: null
+  tls_key: null
+  push_notifications: false
