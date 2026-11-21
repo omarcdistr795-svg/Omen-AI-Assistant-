@@ -248,7 +248,7 @@ class RegistryTests(unittest.TestCase):
         result = self.registry.execute("test.slow", params={})
         self.assertEqual(result.status, "error")
         self.assertEqual(result.error.code, "timeout")
-        self.assertEqual(self.audit.search(tool="test.slow")[0]["status"], "error")
+        self.assertEqual(self.audit.search(tool="test.slow", event_type="tool_call")[0]["status"], "error")
 
     def test_retry_policy(self):
         FlakyTool.calls = 0

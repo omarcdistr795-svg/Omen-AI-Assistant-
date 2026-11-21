@@ -13,6 +13,7 @@ import logging
 import os
 import re
 import sqlite3
+import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -932,11 +933,23 @@ class OmenMemoryStore:
         return {"restored_memories": restored_count, "restored_entities": restored_entities}
 
     def backup(self, backup_dir: Path | str | None = None) -> Path:
-        """Create a compressed snapshot of database and files."""
+        """Create a private, transactionally consistent compressed snapshot."""
         if backup_dir:
             self.filestore.backups_dir = Path(backup_dir)
             self.filestore.backups_dir.mkdir(parents=True, exist_ok=True)
-        return self.filestore.create_backup_archive(self.db_path)
+        self.filestore.backups_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="omen-memory-snapshot-") as temp_dir:
+            snapshot_path = Path(temp_dir) / self.db_path.name
+            with self._lock:
+                source = sqlite3.connect(str(self.db_path))
+                snapshot = sqlite3.connect(str(snapshot_path))
+                try:
+                    source.backup(snapshot)
+                finally:
+                    snapshot.close()
+                    source.close()
+            snapshot_path.chmod(0o600)
+            return self.filestore.create_backup_archive(snapshot_path)
 
     # --- Background Indexer Control ---
 

@@ -11,8 +11,10 @@ import logging
 import os
 import shutil
 import tarfile
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from .secret_rejection import validate_no_secrets
@@ -127,15 +129,32 @@ class FileStore:
 
     def create_backup_archive(self, db_path: Path, backup_name: str | None = None) -> Path:
         """Create a compressed .tar.gz snapshot of the SQLite database and files."""
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%f")
         name = backup_name or f"omen_memory_backup_{ts}.tar.gz"
         archive_path = self.backups_dir / name
-
-        with tarfile.open(archive_path, "w:gz") as tar:
-            if db_path.exists():
-                tar.add(db_path, arcname=db_path.name)
-            if self.files_dir.exists():
-                tar.add(self.files_dir, arcname="files")
+        if Path(name).name != name or name in ("", ".", ".."):
+            raise ValueError("Backup name must be a plain filename")
+        self.backups_dir.mkdir(parents=True, exist_ok=True)
+        self.backups_dir.chmod(0o700)
+        # Build beside the destination and publish atomically. Exclusive
+        # creation prevents a repeated/custom name from silently replacing a
+        # known-good backup.
+        fd, temporary_name = tempfile.mkstemp(prefix=".omen-backup-", dir=self.backups_dir)
+        os.close(fd)
+        temporary_path = Path(temporary_name)
+        try:
+            with tarfile.open(temporary_path, "w:gz") as tar:
+                if db_path.exists():
+                    tar.add(db_path, arcname=db_path.name)
+                if self.files_dir.exists():
+                    tar.add(self.files_dir, arcname="files")
+            temporary_path.chmod(0o600)
+            # link() is an atomic no-overwrite publish on the same filesystem.
+            os.link(temporary_path, archive_path)
+        except FileExistsError:
+            raise FileExistsError(f"Backup already exists: {archive_path}")
+        finally:
+            temporary_path.unlink(missing_ok=True)
 
         return archive_path
 
@@ -148,16 +167,52 @@ class FileStore:
         db_restored = False
         with tarfile.open(archive_path, "r:gz") as tar:
             for member in tar.getmembers():
-                if member.name.startswith("/") or ".." in member.name:
-                    continue  # Guard against zip-slip
+                parts = PurePosixPath(member.name).parts
+                if (not parts or member.name.startswith("/") or "\\" in member.name
+                        or any(part in ("", ".", "..") for part in parts)):
+                    raise ValueError(f"Unsafe backup member path: {member.name!r}")
+                if member.issym() or member.islnk() or not (member.isfile() or member.isdir()):
+                    raise ValueError(f"Unsupported backup member type: {member.name!r}")
+                if member.isdir():
+                    continue
                 if member.name.endswith(".db"):
-                    tar.extract(member, path=db_target.parent)
-                    extracted_db = db_target.parent / member.name
-                    if extracted_db != db_target:
-                        shutil.move(extracted_db, db_target)
+                    if len(parts) != 1:
+                        raise ValueError(f"Database backup must be a top-level file: {member.name!r}")
+                    target = db_target
+                elif parts[0] == "files" and len(parts) > 1:
+                    target = self.root.joinpath(*parts)
+                    resolved_root = self.root.resolve()
+                    resolved_target = target.resolve(strict=False)
+                    if resolved_root not in resolved_target.parents:
+                        raise ValueError(f"Backup member escapes restore directory: {member.name!r}")
+                else:
+                    raise ValueError(f"Unexpected backup member: {member.name!r}")
+                source = tar.extractfile(member)
+                if source is None:
+                    raise ValueError(f"Cannot read backup member: {member.name!r}")
+                target.parent.mkdir(parents=True, exist_ok=True)
+                # Reject symlink parents before writing, including symlinks
+                # already present in a pre-existing files directory.
+                cursor = target.parent
+                while cursor != cursor.parent:
+                    if cursor.is_symlink():
+                        raise ValueError(f"Restore path contains a symlink: {cursor}")
+                    if cursor == self.root or cursor == db_target.parent:
+                        break
+                    cursor = cursor.parent
+                fd, temporary_name = tempfile.mkstemp(prefix=".omen-restore-", dir=target.parent)
+                try:
+                    with os.fdopen(fd, "wb") as output:
+                        shutil.copyfileobj(source, output)
+                        output.flush()
+                        os.fsync(output.fileno())
+                    os.chmod(temporary_name, 0o600)
+                    os.replace(temporary_name, target)
+                finally:
+                    Path(temporary_name).unlink(missing_ok=True)
+                if target == db_target:
                     db_restored = True
-                elif member.name.startswith("files/") and not member.isdir():
-                    tar.extract(member, path=self.root)
+                else:
                     extracted_files += 1
 
         return {"db_restored": db_restored, "files_restored": extracted_files}

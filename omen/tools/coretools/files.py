@@ -258,7 +258,7 @@ class FileUpdate(_FileTool):
 
 class FileDelete(_FileTool):
     name = "files.delete"
-    description = "Soft-delete an allowed file by moving it into quarantine (requires approval)."
+    description = "Soft-delete one allowed file or directory by moving it into quarantine (requires approval)."
     permission_class = "high_risk"
     _schema = {
         "type": "object",
@@ -277,22 +277,52 @@ class FileDelete(_FileTool):
 
     def execute(self, **kwargs: Any) -> dict[str, Any]:
         self.require(kwargs, "path")
-        target = self.policy.resolve(kwargs["path"])
-        if not target.is_file():
-            raise CoreToolError(f"Not a file: {target}")
-        if self.drafts_dir in target.parents or self.quarantine_dir in target.parents:
-            raise CoreToolError("Phase 3 draft/quarantine files are managed by their own tools")
+        raw = self.text(kwargs["path"])
+        if any(char in raw for char in "*?[]"):
+            raise CoreToolError("Wildcard paths are not accepted; provide one exact path")
+        candidate = Path(raw).expanduser()
+        if not candidate.is_absolute():
+            candidate = self.policy.roots[0] / candidate
+        # Reject symlink aliases, including a symlinked final target. PathPolicy
+        # still performs the authoritative allowed-root/escape check below.
+        cursor = candidate
+        while cursor != cursor.parent:
+            if cursor.is_symlink():
+                raise CoreToolError(f"Symlink paths cannot be quarantined: {cursor}")
+            cursor = cursor.parent
+        target = self.policy.resolve(raw)
+        if not target.is_file() and not target.is_dir():
+            raise CoreToolError(f"Not a regular file or directory: {target}")
+        if target in self.policy.roots:
+            raise CoreToolError("An allowed root cannot be quarantined")
+        protected = (self.drafts_dir.resolve(), self.quarantine_dir.resolve())
+        if any(target == path or path in target.parents or target in path.parents for path in protected):
+            raise CoreToolError("Phase 3 draft/quarantine paths and their parents are managed internally")
         self.quarantine_dir.mkdir(parents=True, exist_ok=True)
         destination = self.quarantine_dir / self._stamp(target.name)
-        shutil.move(str(target), str(destination))
-        plan = self.rollback.record(
-            "file_restore_move", self.name, str(target), {"path": str(target), "quarantine": str(destination)}
-        )
+        if destination.exists():
+            raise CoreToolError("A quarantine entry with this generated name already exists")
+        is_directory = target.is_dir()
+        try:
+            # A directory is quarantined with one same-filesystem rename. Do
+            # not fall back to copytree/remove behavior across mount points.
+            target.rename(destination) if is_directory else shutil.move(str(target), str(destination))
+        except OSError as exc:
+            if is_directory:
+                raise CoreToolError(f"Cannot quarantine directory without copying or deleting its contents: {exc}") from exc
+            raise
+        try:
+            plan = self.rollback.record(
+                "file_restore_move", self.name, str(target), {"path": str(target), "quarantine": str(destination)}
+            )
+        except Exception:
+            destination.rename(target) if is_directory else shutil.move(str(destination), str(target))
+            raise
         return {
             "deleted": str(target),
             "quarantine": str(destination),
             "rollback_plan_id": plan,
-            "rollback": "undo moves the file back",
+            "rollback": "undo moves the quarantined item back",
         }
 
 

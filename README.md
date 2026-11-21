@@ -14,7 +14,9 @@ Stark's JARVIS with the calm, low, slightly eerie presence of Omen.
 
 Phase 5 adds briefings and automation. Phase 6 adds a local, authenticated,
 HUD-style web dashboard that reads and acts only through existing public
-interfaces. Release hardening remains for Phase 7.
+interfaces. Phase 7 adds release hardening, verifies backup and recovery paths,
+and documents setup, update, and rollback procedures. See
+[docs/PHASE7_RUNBOOK.md](docs/PHASE7_RUNBOOK.md).
 
 ## Setup
 
@@ -357,7 +359,7 @@ to shed under memory pressure and it must not load any model.
 Start:
 
 ```bash
-# in .env: OMEN_DASHBOARD_TOKEN=<long-random-token>
+# in .env, set OMEN_DASHBOARD_TOKEN to a long random value
 python3 -m omen.cli.main
 omen> /dashboard start
 # open http://127.0.0.1:8765/?token=<token>
@@ -448,6 +450,13 @@ The test suite uses standard-library `unittest` only and covers:
   under memory pressure.
   It only speaks when Phase 4 local voice is actually available; otherwise the
   terminal fallback is used and reported.
+- Phase 7 acceptance and soak checks use local mocks. Live microphone,
+  Piper/Vosk models, Ollama availability, and cloud access remain
+  `BLOCKED-EXTERNAL` until verified on the target laptop.
+- `files.delete` can quarantine one exact file or directory under high-risk
+  approval. It moves directories with a same-filesystem rename, preserves the
+  complete tree for rollback, rejects wildcard and symlink paths, and never
+  recursively removes contents.
 - **Phase 5 state** redacts secrets at write time. ISO timestamps are preserved
   only for known machine-readable fields so deadline arithmetic works.
 
@@ -485,3 +494,12 @@ Phase 5 automation is additive and reversible:
 
 No new third-party dependencies were added in Phase 5 (standard library only).
 The pinned Phase 1 `PyYAML==6.0.3` and Phase 4 voice extras are unchanged.
+
+## Phase 7 — hardening and release
+
+Run the standard-library suite with `python3 -m unittest discover -s tests`.
+Phase 7 adds backup/restore security, audit-chain, six mocked acceptance, and
+concurrent resource-soak checks. Setup, health review, secret scan, update,
+backup, release, and rollback steps are in the
+[Phase 7 runbook](docs/PHASE7_RUNBOOK.md). Phase 7 adds no runtime or test
+dependencies and no configuration keys.

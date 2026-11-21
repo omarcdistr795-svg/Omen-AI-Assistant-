@@ -224,10 +224,25 @@ class RollbackUndo(CoreTool):
             shutil.copy2(backup, target)
             detail["restored"] = str(target)
         elif kind == "file_restore_move":
+            raw_target = Path(str(payload["path"]))
+            raw_source = Path(str(payload["quarantine"]))
+            if raw_target.is_symlink() or raw_source.is_symlink():
+                raise CoreToolError("Rollback paths cannot be symlinks")
             target = self._safe_path(payload["path"])
             source = self._safe_path(payload["quarantine"], must_exist=True)
+            quarantine_root = self.quarantine_dir.resolve()
+            if source == quarantine_root or quarantine_root not in source.parents:
+                raise CoreToolError("Quarantine source is outside the managed quarantine directory")
+            if target.exists() or target.is_symlink():
+                raise CoreToolError("Cannot restore because the original path already exists")
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(source), str(target))
+            if source.is_dir():
+                try:
+                    source.rename(target)
+                except OSError as exc:
+                    raise CoreToolError(f"Cannot restore directory without copying or deleting its contents: {exc}") from exc
+            else:
+                shutil.move(str(source), str(target))
             detail["restored"] = str(target)
         elif kind in ("record_restore", "record_remove"):
             connector_name = payload.get("connector")

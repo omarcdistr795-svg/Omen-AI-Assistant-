@@ -39,7 +39,7 @@ class DegradationPolicy:
             if component in self.never or component not in active_set:
                 continue
             action = _ACTIONS.get(component, f"degrade {component}")
-            if component == "local_reasoning_model" and component in loaded:
+            if component == "local_reasoning_model" and "local_reasoning" in loaded:
                 action += " (unload now)"
             actions.append(
                 {

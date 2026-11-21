@@ -46,16 +46,35 @@ class AuditLog:
         self.user = user
         self.agent = agent
         self._last_hash = self._tail_hash()
+        self.path.parent.chmod(0o700)
+        if self.path.exists():
+            self._secure(self.path)
 
     def _tail_hash(self) -> str:
         if not self.path.exists():
             return GENESIS
-        last = GENESIS
-        with self.path.open("r", encoding="utf-8") as handle:
-            for line in handle:
-                if line.strip():
-                    last = json.loads(line).get("hash", GENESIS)
-        return last
+        return self._validated_tail()
+
+    def _validated_tail(self) -> str:
+        """Return the current chain head, rejecting malformed or altered logs."""
+        previous = GENESIS
+        for line_no, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), 1):
+            if not line.strip():
+                continue
+            try:
+                record = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise AuditError(f"Malformed audit line {line_no}: {exc}") from exc
+            if not isinstance(record, dict):
+                raise AuditError(f"Malformed audit line {line_no}: expected an object")
+            body = {key: value for key, value in record.items() if key != "hash"}
+            expected = hashlib.sha256(previous.encode("utf-8") + _canonical(body)).hexdigest()
+            current = record.get("hash")
+            if (record.get("prev_hash") != previous or not isinstance(current, str)
+                    or len(current) != 64 or current != expected):
+                raise AuditError(f"Audit integrity failure at line {line_no}")
+            previous = current
+        return previous
 
     def _secure(self, path: Path) -> None:
         try:
@@ -64,9 +83,9 @@ class AuditLog:
         except OSError as exc:  # fail loudly on unexpected filesystems
             raise AuditError(f"Cannot restrict audit log permissions: {exc}") from exc
 
-    def _hash(self, record: dict) -> str:
+    def _hash(self, record: dict, previous: str | None = None) -> str:
         body = {key: value for key, value in record.items() if key not in ("hash",)}
-        return hashlib.sha256(self._last_hash.encode("utf-8") + _canonical(body)).hexdigest()
+        return hashlib.sha256((previous or self._last_hash).encode("utf-8") + _canonical(body)).hexdigest()
 
     def append(self, event: dict) -> dict:
         """Append one redacted event and return the stored record."""
@@ -89,18 +108,21 @@ class AuditLog:
             "duration_ms": event.get("duration_ms"),
             "retries": event.get("retries", 0),
             "error": redact_value(event.get("error")),
-            "tokens": event.get("tokens") or {},
+            "tokens": redact_value(event.get("tokens") or {}),
             "cost_usd": event.get("cost_usd", 0.0),
-            "resources": event.get("resources") or {},
+            "resources": redact_value(event.get("resources") or {}),
             "summary": redact_value(event.get("summary") or ""),
             "event_type": event.get("event_type", "tool_call"),
-            "prev_hash": self._last_hash,
         }
-        record["hash"] = self._hash(record)
-        line = _canonical(record).decode("utf-8") + "\n"
         with self.path.open("a", encoding="utf-8") as handle:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
+                # Refresh under the interprocess lock so concurrent Omen
+                # instances append to one chain rather than fork it.
+                previous = self._tail_hash() if self.path.stat().st_size > 0 else GENESIS
+                record["prev_hash"] = previous
+                record["hash"] = self._hash(record, previous)
+                line = _canonical(record).decode("utf-8") + "\n"
                 handle.write(line)
                 handle.flush()
                 os.fsync(handle.fileno())
@@ -151,14 +173,11 @@ class AuditLog:
         return results
 
     def verify_integrity(self) -> bool:
-        records = self._read_records()
-        previous = GENESIS
-        for record in records:
-            body = {key: value for key, value in record.items() if key != "hash"}
-            expected = hashlib.sha256(previous.encode("utf-8") + _canonical(body)).hexdigest()
-            if record.get("prev_hash") != previous or record.get("hash") != expected:
-                return False
-            previous = record["hash"]
+        try:
+            records = self._read_records()
+            self._validated_tail() if self.path.exists() else GENESIS
+        except AuditError:
+            return False
         self._log_access("verify_integrity", {"actor": self.user, "count": len(records)})
         return True
 

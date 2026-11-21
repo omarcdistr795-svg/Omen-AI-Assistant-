@@ -180,6 +180,28 @@ class ToolRegistry:
                 ) from exc
 
     def _audit(self, action: dict, result: ToolResult, *, output: Any, start: float, provider: str | None, model: str | None, cost: float, tokens: dict, resources: dict) -> None:
+        # Preserve the verified lifecycle as discrete audit events. When an
+        # action needed approval, its plan was already recorded before the
+        # approval event, so only the post-approval stages are repeated here.
+        stages = list(result.lifecycle)
+        if result.approval:
+            stages = [stage for stage in stages if stage not in (Stage.PLAN.value, Stage.CONFIRM.value)]
+        for stage in stages:
+            self.audit.append(
+                {
+                    "event_type": "tool_lifecycle",
+                    "tool": action["tool"],
+                    "target": action.get("target"),
+                    "args": action.get("params") or {},
+                    "decision": result.decision,
+                    "status": stage,
+                    "result": {"stage": stage, "tool_status": result.status},
+                    "summary": f"{action['tool']}: {stage}",
+                    "provider": provider,
+                    "model": model,
+                    "trace_id": action.get("trace_id"),
+                }
+            )
         self.audit.append(
             {
                 "event_type": "tool_call",
