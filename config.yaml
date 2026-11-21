@@ -269,7 +269,7 @@ voice:
     length_scale: 1.12
   require_transcript_confirmation_for_risky_or_ambiguous: true
   retain_audio: false
-  follow_up_enabled: true
+  follow_up_enabled: false
   follow_up_seconds: 8
   wake:
     enabled: false

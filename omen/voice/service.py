@@ -61,6 +61,8 @@ class VoiceService:
         self.wake_detector = wake_detector
         self.brain: Callable[[str], str] | None = None
         self.kill: Callable[[str], dict] | None = None
+        self.on_capture_start: Callable[[], None] | None = None
+        self.on_capture_end: Callable[[], None] | None = None
         self.hotkey: EvdevPushToTalk | None = None
         self._wake_requested = False
         self._wake_suspended = False
@@ -154,11 +156,31 @@ class VoiceService:
         return self.vad
 
     def begin_push_to_talk(self) -> None:
+        if self._recording:
+            self._cancel_capture()
         self._begin_capture(
             int(self._value("max_recording_seconds", 300)),
             "push_to_talk",
             "Listening. Release the push-to-talk key when you are done.",
         )
+
+    def _cancel_capture(self) -> None:
+        """Discard an active capture without processing it (e.g. a stale follow-up)."""
+        with self._lock:
+            if not self._recording:
+                return
+            self._recording = False
+            timer, self._recording_timer = self._recording_timer, None
+        if timer is not None and timer is not threading.current_thread():
+            timer.cancel()
+        if self.on_capture_end:
+            self.on_capture_end()
+        try:
+            path = self._audio_device().end_recording()
+            if not bool(self._value("retain_audio", False)):
+                path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     def _begin_capture(self, seconds: int, reason: str, announcement: str) -> None:
         if seconds <= 0 or seconds > 600:
@@ -181,6 +203,8 @@ class VoiceService:
             self._recording_timer.daemon = True
             self._recording_timer.start()
         self.output(announcement)
+        if self.on_capture_start:
+            self.on_capture_start()
 
     def end_push_to_talk(self) -> dict:
         with self._lock:
@@ -191,6 +215,8 @@ class VoiceService:
             timer, self._recording_timer = self._recording_timer, None
         if timer is not None and timer is not threading.current_thread():
             timer.cancel()
+        if self.on_capture_end:
+            self.on_capture_end()
         path = self._audio_device().end_recording()
         try:
             result = self.process_sample(path)
@@ -491,6 +517,8 @@ class VoiceService:
         if timer is not None and timer is not threading.current_thread():
             timer.cancel()
         audio_result = self.audio.stop() if self.audio else {"stopped": []}
+        if self._recording and self.on_capture_end:
+            self.on_capture_end()
         self._recording = False
         self._counts["stops"] += 1
         return {"hotkey_stopped": bool(self.hotkey), "audio": audio_result}

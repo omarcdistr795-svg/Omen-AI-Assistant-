@@ -9,11 +9,21 @@ import threading
 
 from ..app import OmenApp
 from .commands import handle_command
+from .indicator import ListeningIndicator
 from .render import render_tool_progress
 
 
 def main() -> int:
-    app = OmenApp(output=lambda text: print(text, flush=True))
+    indicator = ListeningIndicator()
+
+    def app_output(text: str) -> None:
+        if text.startswith("Listening."):
+            return
+        print(text, flush=True)
+
+    app = OmenApp(output=app_output)
+    app.voice.on_capture_start = indicator.start
+    app.voice.on_capture_end = indicator.stop
     confirmations: queue.Queue[dict] = queue.Queue()
 
     def confirm_voice(transcript: str, confidence: float) -> bool:

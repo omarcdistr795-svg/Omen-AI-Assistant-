@@ -143,18 +143,32 @@ class VoiceTests(unittest.TestCase):
         self.assertEqual(self.kills, ["spoken kill command"])
         self.assertEqual(self.brain_calls, [])
 
-    def test_hold_to_talk_stays_recording_until_release(self):
+    def test_hold_to_talk_uses_long_capture_until_release(self):
         self.voice.begin_push_to_talk()
         timer = self.voice._recording_timer
         self.assertIsNotNone(timer)
         self.assertGreaterEqual(timer.interval, 300)
         self.assertTrue(self.audio.active)
-        self.voice.begin_push_to_talk()
-        self.assertIs(self.voice._recording_timer, timer)
-        self.assertTrue(self.audio.active)
         result = self.voice.end_push_to_talk()
         self.assertTrue(result.get("accepted"))
         self.assertFalse(self.audio.active)
+
+    def test_new_press_cancels_stale_follow_up_and_starts_fresh(self):
+        self.app_config.sections["voice"]["retain_audio"] = True
+        started, ended = [], []
+        self.voice.on_capture_start = lambda: started.append(True)
+        self.voice.on_capture_end = lambda: ended.append(True)
+        self.voice.begin_push_to_talk()
+        self.voice.end_push_to_talk()
+        self.voice._begin_capture(8, "follow_up", "Follow-up window")
+        follow_timer = self.voice._recording_timer
+        self.voice.begin_push_to_talk()
+        self.assertIsNot(self.voice._recording_timer, follow_timer)
+        self.assertEqual(self.voice._capture_reason, "push_to_talk")
+        self.assertGreaterEqual(self.voice._recording_timer.interval, 300)
+        self.assertEqual(len(ended), 2)
+        self.assertEqual(len(started), 3)
+        self.voice.end_push_to_talk()
 
     def test_barge_in_interrupts_speech_under_300ms(self):
         audio = MockAudioDevice(self.sample, block_playback=True)
