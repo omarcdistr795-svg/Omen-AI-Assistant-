@@ -14,6 +14,7 @@ CTRL_L, CTRL_R, ALT_L, ALT_R, KEY_V, KEY_A = 29, 97, 56, 100, 47, 30
 class HotkeyChordTests(unittest.TestCase):
     def test_parse_single_key_and_chord(self) -> None:
         self.assertEqual(parse_hotkey_spec("KEY_RIGHTCTRL"), ([], "KEY_RIGHTCTRL"))
+        self.assertEqual(parse_hotkey_spec("V"), ([], "V"))
         self.assertEqual(parse_hotkey_spec("CTRL+V"), (["CTRL"], "V"))
         self.assertEqual(parse_hotkey_spec("Shift + Alt + V"), (["Shift", "Alt"], "V"))
 
