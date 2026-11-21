@@ -241,7 +241,7 @@ voice:
   enabled: true
   voice_only_answers: false
   mode: push_to_talk
-  hotkey: V
+  hotkey: SUPER+SHIFT+V
   audio_backend: pipewire
   audio_mode: headset
   record_command: pw-record
