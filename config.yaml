@@ -240,7 +240,7 @@ core_tools:
 voice:
   enabled: true
   mode: push_to_talk
-  hotkey: KEY_RIGHTCTRL
+  hotkey: CTRL+V
   audio_backend: pipewire
   audio_mode: headset
   record_command: pw-record
