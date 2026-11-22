@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools==75.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "omen-assistant"
+version = "0.6.0"
+description = "Omen — a local-first personal AI assistant (Phase 1 foundation & Phase 2 memory)"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "PyYAML==6.0.3",
+]
+
+[project.optional-dependencies]
+# Tests are written against the standard-library unittest runner, so pytest is
+# optional. It is pinned here for environments that prefer it.
+test = [
+    "pytest==8.3.4",
+]
+voice = [
+    "evdev==1.9.2",
+    "vosk==0.3.45",
+    "piper-tts==1.3.0",
+]
+
+[project.scripts]
+omen = "omen.cli.main:main"
+omen-benchmark = "scripts.benchmark:main"
+
+[tool.setuptools.packages.find]
+include = ["omen*", "scripts*"]
